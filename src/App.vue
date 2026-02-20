@@ -185,7 +185,7 @@ const runAnalyze = async () => {
   result.value = null
 
   try {
-    const response = await fetch('http://localhost:8089/ai/analyze', {
+    const response = await fetch('http://localhost:8088/ai/analyze', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
