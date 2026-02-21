@@ -1,478 +1,464 @@
 <template>
-  <div class="page">
-    <header class="hero">
-      <div class="title-block">
-        <p class="kicker">Nexus AI • Анализ энергии</p>
-        <h1>AI Analyze</h1>
-        <p class="subtitle">
-          Отправь данные трекинга и получи энергетику по часу и дням недели,
-          а также текстовый insight.
-        </p>
-      </div>
-      <div class="actions">
-        <button class="primary" :disabled="loading" @click="runAnalyze">
-          {{ loading ? 'Запрос выполняется…' : 'Запросить анализ' }}
-        </button>
-        <div class="meta" v-if="lastRunAt">
-          Последний запрос: {{ lastRunAt }}
-        </div>
-        <div class="error" v-if="error">
-          {{ error }}
-        </div>
-      </div>
-    </header>
-
-    <section class="panel" v-if="result">
-      <div class="panel-head">
-        <h2>Энергия по часам</h2>
-        <span class="badge">{{ energyByHourBars.length }} точек</span>
-      </div>
-      <div class="bars">
-        <div class="bar-row" v-for="item in energyByHourBars" :key="item.label">
-          <div class="bar-label">{{ item.label }}:00</div>
-          <div class="bar-track">
-            <div class="bar-fill" :style="{ width: item.width + '%' }"></div>
-          </div>
-          <div class="bar-value">{{ item.value.toFixed(2) }}</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel" v-if="result">
-      <div class="panel-head">
-        <h2>Энергия по дням недели</h2>
-        <span class="badge">{{ energyByWeekdayBars.length }} дней</span>
-      </div>
-      <div class="bars">
-        <div class="bar-row" v-for="item in energyByWeekdayBars" :key="item.label">
-          <div class="bar-label">{{ item.label }}</div>
-          <div class="bar-track">
-            <div class="bar-fill alt" :style="{ width: item.width + '%' }"></div>
-          </div>
-          <div class="bar-value">{{ item.value.toFixed(2) }}</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel grid" v-if="result">
-      <div class="card">
-        <div class="panel-head">
-          <h2>Модель продуктивности</h2>
-          <span class="badge">score {{ result.productivity_model?.score?.toFixed(2) ?? '—' }}</span>
-        </div>
-        <ul class="list">
-          <li v-for="(value, key) in result.productivity_model?.weights" :key="key">
-            <span class="label">{{ key }}</span>
-            <span class="value">{{ value }}</span>
-          </li>
-        </ul>
-      </div>
-
-      <div class="card">
-        <div class="panel-head">
-          <h2>Риск выгорания</h2>
-          <span class="badge" :class="burnoutLevelClass">{{ result.burnout_risk?.level ?? 'n/a' }}</span>
-        </div>
-        <div class="metric">
-          <div class="metric-label">Score</div>
-          <div class="metric-value">{{ result.burnout_risk?.score ?? '—' }}</div>
-        </div>
-        <ul class="list">
-          <li v-for="reason in result.burnout_risk?.reasons || []" :key="reason">
-            {{ reason }}
-          </li>
-        </ul>
-      </div>
-
-      <div class="card">
-        <div class="panel-head">
-          <h2>LLM Insight</h2>
-          <span class="badge">summary</span>
-        </div>
-        <pre class="insight">{{ result.llm_insight }}</pre>
-      </div>
-    </section>
-
-    <section class="panel" v-if="result">
-      <div class="panel-head">
-        <h2>Запрос (payload)</h2>
-      </div>
-      <pre class="payload">{{ prettyRequest }}</pre>
-    </section>
+  <div class="app" :data-theme="theme">
+    <div class="shell">
+      <TopBar :theme="theme" @toggle-theme="toggleTheme" />
+      <A2HSBanner />
+      <main class="container">
+        <RouterView />
+      </main>
+      <AppFooter />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
+import { RouterView } from 'vue-router'
+import TopBar from './components/TopBar.vue'
+import A2HSBanner from './components/A2HSBanner.vue'
+import AppFooter from './components/AppFooter.vue'
 
-const requestBody = {
-  user_tz: 'Europe/Amsterdam',
-  constraints: {
-    work_start_hour: 9,
-    work_end_hour: 18
-  },
-  week_starts: 'monday',
-  points: [
-    { ts: '2026-02-03T08:30:00+01:00', sleep_hours: 7.6, mood: 7.2, activity: 6.0, productive: 6.8 },
-    { ts: '2026-02-03T10:00:00+01:00', sleep_hours: 7.6, mood: 7.4, activity: 6.5, productive: 7.2 },
-    { ts: '2026-02-03T14:00:00+01:00', sleep_hours: 7.6, mood: 6.9, activity: 5.6, productive: 6.4 },
-    { ts: '2026-02-03T16:30:00+01:00', sleep_hours: 7.6, mood: 6.7, activity: 5.2, productive: 6.0 },
+const theme = ref('dark')
 
-    { ts: '2026-02-04T09:00:00+01:00', sleep_hours: 7.2, mood: 6.8, activity: 5.8, productive: 6.3 },
-    { ts: '2026-02-04T11:30:00+01:00', sleep_hours: 7.2, mood: 7.0, activity: 6.2, productive: 6.7 },
-    { ts: '2026-02-04T15:00:00+01:00', sleep_hours: 7.2, mood: 6.4, activity: 5.0, productive: 5.8 },
-
-    { ts: '2026-02-05T08:45:00+01:00', sleep_hours: 6.6, mood: 6.2, activity: 5.4, productive: 5.9 },
-    { ts: '2026-02-05T10:30:00+01:00', sleep_hours: 6.6, mood: 6.5, activity: 5.8, productive: 6.2 },
-    { ts: '2026-02-05T14:30:00+01:00', sleep_hours: 6.6, mood: 6.0, activity: 4.8, productive: 5.4 },
-    { ts: '2026-02-05T17:00:00+01:00', sleep_hours: 6.6, mood: 5.8, activity: 4.6, productive: 5.1 },
-
-    { ts: '2026-02-06T09:15:00+01:00', sleep_hours: 7.9, mood: 7.6, activity: 6.6, productive: 7.4 },
-    { ts: '2026-02-06T12:00:00+01:00', sleep_hours: 7.9, mood: 7.2, activity: 6.0, productive: 6.9 },
-    { ts: '2026-02-06T15:30:00+01:00', sleep_hours: 7.9, mood: 6.9, activity: 5.5, productive: 6.3 },
-
-    { ts: '2026-02-07T10:00:00+01:00', sleep_hours: 8.3, mood: 7.9, activity: 6.8, productive: 7.1 },
-    { ts: '2026-02-07T13:00:00+01:00', sleep_hours: 8.3, mood: 7.4, activity: 6.1, productive: 6.6 },
-
-    { ts: '2026-02-08T09:30:00+01:00', sleep_hours: 8.0, mood: 7.7, activity: 6.4, productive: 7.0 },
-    { ts: '2026-02-08T14:00:00+01:00', sleep_hours: 8.0, mood: 7.2, activity: 5.8, productive: 6.5 }
-  ]
-}
-
-const loading = ref(false)
-const error = ref('')
-const result = ref(null)
-const lastRunAt = ref('')
-
-const prettyRequest = computed(() => JSON.stringify(requestBody, null, 2))
-
-const energyByHourBars = computed(() => {
-  if (!result.value?.energy_by_hour) return []
-  const entries = Object.entries(result.value.energy_by_hour)
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => Number(a.label) - Number(b.label))
-
-  const maxValue = Math.max(...entries.map((item) => item.value)) || 1
-  return entries.map((item) => ({
-    ...item,
-    width: (item.value / maxValue) * 100
-  }))
-})
-
-const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const energyByWeekdayBars = computed(() => {
-  if (!result.value?.energy_by_weekday) return []
-  const entries = Object.entries(result.value.energy_by_weekday)
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => weekdayOrder.indexOf(a.label) - weekdayOrder.indexOf(b.label))
-
-  const maxValue = Math.max(...entries.map((item) => item.value)) || 1
-  return entries.map((item) => ({
-    ...item,
-    width: (item.value / maxValue) * 100
-  }))
-})
-
-const burnoutLevelClass = computed(() => {
-  const level = result.value?.burnout_risk?.level
-  if (!level) return ''
-  return `badge-${level}`
-})
-
-const runAnalyze = async () => {
-  loading.value = true
-  error.value = ''
-  result.value = null
-
-  try {
-    const response = await fetch('http://localhost:8088/ai/analyze', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    })
-
-    if (!response.ok) {
-      const text = await response.text()
-      throw new Error(`Ошибка ${response.status}: ${text || response.statusText}`)
-    }
-
-    result.value = await response.json()
-    lastRunAt.value = new Date().toLocaleString('ru-RU')
-  } catch (err) {
-    error.value = err?.message || 'Не удалось выполнить запрос'
-  } finally {
-    loading.value = false
-  }
+const toggleTheme = () => {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
 }
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
-:root {
-  color-scheme: light;
-}
-
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: 'Space Grotesk', sans-serif;
-  background: radial-gradient(circle at top left, #e8f5ff 0%, #f6f2ff 45%, #fff6e8 100%);
-  color: #151619;
+  font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
 }
 
-.page {
+a { color: inherit; text-decoration: none; }
+
+.app {
+  min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.app[data-theme='dark'] {
+  --bg: #0f1220;
+  --bg-2: #171b2a;
+  --fg: #f6f8fc;
+  --muted: #c1c7d6;
+  --accent: #2f80ff;
+  --accent-2: #7c3aed;
+  --accent-3: #2de2e6;
+  --accent-4: #ff4fd8;
+  --glass: rgba(255,255,255,0.06);
+  --line: rgba(255,255,255,0.1);
+}
+
+.app[data-theme='light'] {
+  --bg: #f4f6ff;
+  --bg-2: #ffffff;
+  --fg: #10141f;
+  --muted: #5d6475;
+  --accent: #2f80ff;
+  --accent-2: #6f4cff;
+  --accent-3: #18c8cc;
+  --accent-4: #ff4fd8;
+  --glass: rgba(16,20,31,0.06);
+  --line: rgba(16,20,31,0.12);
+}
+
+.shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 700px at 8% 6%, rgba(47,128,255,0.16), transparent 60%),
+    radial-gradient(1200px 700px at 92% 12%, rgba(124,58,237,0.14), transparent 60%),
+    radial-gradient(900px 900px at 50% 90%, rgba(255,79,216,0.1), transparent 60%),
+    var(--bg);
+  color: var(--fg);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 28px;
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  z-index: 5;
+}
+
+.brand .logo {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.brand .sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.top-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.toggle {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: none;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.container {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: 28px 24px 40px;
+  width: 100%;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 28px 24px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.a2hs {
+  max-width: 1100px;
+  margin: 12px auto 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.a2hs-text {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.a2hs-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.muted { color: var(--muted); }
+
+.pill {
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.primary {
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2), var(--accent-4));
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  background-size: 200% 200%;
+  animation: gradientFlow 8s ease-in-out infinite;
+}
+
+.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.btn {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  padding: 10px 16px;
+  border-radius: 10px;
 }
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 28px;
   align-items: start;
-  margin-bottom: 32px;
 }
 
-.kicker {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 12px;
-  font-weight: 600;
-  color: #5a60ff;
-  margin: 0 0 12px;
+.hero h1 {
+  margin: 12px 0;
+  font-size: clamp(30px, 4vw, 52px);
 }
 
-h1 {
-  font-size: 48px;
-  margin: 0 0 12px;
+.hero p {
+  margin: 0 0 18px;
+  color: var(--muted);
 }
 
-.subtitle {
-  font-size: 16px;
-  line-height: 1.6;
-  margin: 0;
-  color: #2f3341;
+.hero-card {
+  padding: 20px;
+  border-radius: 16px;
 }
 
-.actions {
-  background: #111216;
-  color: #f7f7fb;
-  padding: 24px;
-  border-radius: 18px;
-  box-shadow: 0 16px 40px rgba(17, 18, 22, 0.2);
-}
-
-.primary {
-  width: 100%;
-  border: none;
-  background: linear-gradient(120deg, #5a60ff, #00c3ff);
-  color: #fff;
-  padding: 14px 18px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.primary:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.primary:not(:disabled):hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(90, 96, 255, 0.35);
-}
-
-.meta {
+.hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
   margin-top: 16px;
-  font-size: 13px;
-  color: #b9c0ff;
 }
 
-.error {
-  margin-top: 12px;
-  font-size: 13px;
-  color: #ff9c9c;
+.metric {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--glass);
 }
 
-.panel {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 12px 28px rgba(15, 16, 19, 0.08);
-  margin-bottom: 24px;
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.panel-head h2 {
-  font-size: 20px;
-  margin: 0;
-}
-
-.badge {
-  padding: 6px 12px;
-  border-radius: 999px;
+.metric .label {
   font-size: 12px;
+  color: var(--muted);
+}
+
+.metric .value {
   font-weight: 600;
-  background: #edf0ff;
-  color: #4a50ff;
-}
-
-.badge-low {
-  background: #e6fff5;
-  color: #0f8b5d;
-}
-
-.badge-medium {
-  background: #fff5d6;
-  color: #a86b07;
-}
-
-.badge-high {
-  background: #ffe3e3;
-  color: #b3261e;
-}
-
-.bars {
-  display: grid;
-  gap: 12px;
-}
-
-.bar-row {
-  display: grid;
-  grid-template-columns: 90px minmax(0, 1fr) 60px;
-  gap: 12px;
-  align-items: center;
-}
-
-.bar-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1c1f2e;
-}
-
-.bar-track {
-  height: 12px;
-  background: #eef1f7;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #5a60ff 0%, #6bffb9 100%);
-  border-radius: 999px;
-  transition: width 0.4s ease;
-}
-
-.bar-fill.alt {
-  background: linear-gradient(90deg, #ff7a59 0%, #ffd56b 100%);
-}
-
-.bar-value {
-  font-size: 13px;
-  text-align: right;
-  color: #2f3341;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 20px;
 }
 
-.card {
-  background: #ffffff;
+.auth {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr;
+  gap: 24px;
+}
+
+.auth-card,
+.auth-side {
+  padding: 24px;
+  border-radius: 16px;
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.form input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+}
+
+.auth-footer {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.auth-footer a { color: var(--accent-3); }
+
+.dashboard {
+  display: grid;
+  gap: 24px;
+}
+
+.dash-hero {
+  padding: 24px;
   border-radius: 18px;
-  padding: 20px;
-  box-shadow: 0 8px 22px rgba(17, 18, 22, 0.08);
+  display: grid;
+  grid-template-columns: 1fr 0.8fr;
+  gap: 24px;
 }
 
-.list {
-  list-style: none;
-  padding: 0;
-  margin: 16px 0 0;
+.spark {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+}
+
+.spark-title {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.spark-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  align-items: end;
+  height: 88px;
+}
+
+.spark-grid .bar {
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--accent-3), var(--accent), var(--accent-4));
+  background-size: 200% 200%;
+  animation: gradientFlow 10s ease-in-out infinite;
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.week-bars {
   display: grid;
   gap: 10px;
 }
 
-.list li {
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-  color: #2f3341;
-}
-
-.list .label {
-  color: #6a6f7f;
-}
-
-.metric {
-  display: flex;
-  justify-content: space-between;
+.week-bars .row {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 10px;
   align-items: center;
-  padding: 10px 12px;
-  background: #f7f8fb;
-  border-radius: 12px;
-  margin-top: 8px;
-}
-
-.metric-label {
-  font-size: 13px;
-  color: #70748a;
-}
-
-.metric-value {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.insight {
-  background: #0f1117;
-  color: #e6e9f2;
-  padding: 16px;
-  border-radius: 12px;
-  white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.5;
-  min-height: 160px;
-}
-
-.payload {
-  background: #f7f8fb;
-  padding: 16px;
-  border-radius: 12px;
   font-size: 12px;
-  overflow-x: auto;
-  white-space: pre-wrap;
+  color: var(--muted);
 }
 
-@media (max-width: 860px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
+.track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
 
-  h1 {
-    font-size: 36px;
-  }
+.fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-3), var(--accent-4));
+  background-size: 200% 200%;
+  animation: gradientFlow 10s ease-in-out infinite;
+}
 
-  .bar-row {
-    grid-template-columns: 70px minmax(0, 1fr) 50px;
-  }
+.risk {
+  display: grid;
+  gap: 8px;
+}
+
+.risk-score {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.tips {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.entries {
+  display: grid;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge-blue { background: rgba(47,128,255,0.18); color: #2f80ff; border: 1px solid rgba(47,128,255,0.35); }
+.badge-purple { background: rgba(124,58,237,0.18); color: #7c3aed; border: 1px solid rgba(124,58,237,0.35); }
+.badge-cyan { background: rgba(45,226,230,0.18); color: #2de2e6; border: 1px solid rgba(45,226,230,0.35); }
+
+.card {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+}
+
+.meter {
+  height: 8px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 8px 0 12px;
+}
+
+.meter span {
+  display: block;
+  height: 100%;
+  width: 68%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-3));
+  background-size: 200% 200%;
+  animation: gradientFlow 10s ease-in-out infinite;
+}
+
+@keyframes gradientFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@media (max-width: 900px) {
+  .container { padding: 20px 16px 40px; }
+  .hero, .dash-hero { grid-template-columns: 1fr; }
+  .grid { grid-template-columns: 1fr; }
+  .dash-grid { grid-template-columns: 1fr; }
+  .auth { grid-template-columns: 1fr; }
+  .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .a2hs { flex-direction: column; align-items: flex-start; }
 }
 </style>
