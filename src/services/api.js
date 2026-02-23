@@ -1,6 +1,11 @@
 const API_BASE = process.env.VUE_APP_API_BASE || 'http://localhost:8088'
 
 const getToken = () => localStorage.getItem('nexus_access_token')
+const notifyAuth = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('auth-changed'))
+  }
+}
 
 const request = async (path, { method = 'GET', body, auth = false } = {}) => {
   const headers = { 'Content-Type': 'application/json' }
@@ -14,6 +19,14 @@ const request = async (path, { method = 'GET', body, auth = false } = {}) => {
     headers,
     body: body ? JSON.stringify(body) : undefined
   })
+
+  if (auth && res.status === 401) {
+    tokenStore.clear()
+    if (typeof window !== 'undefined') {
+      window.location.assign('/login')
+    }
+    throw new Error('Unauthorized')
+  }
 
   if (!res.ok) {
     const text = await res.text()
@@ -36,9 +49,11 @@ export const aiApi = {
 export const tokenStore = {
   set(accessToken) {
     if (accessToken) localStorage.setItem('nexus_access_token', accessToken)
+    notifyAuth()
   },
   clear() {
     localStorage.removeItem('nexus_access_token')
+    notifyAuth()
   },
   get() {
     return localStorage.getItem('nexus_access_token')

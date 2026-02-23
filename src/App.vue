@@ -33,12 +33,20 @@ const toggleTheme = () => {
 body {
   margin: 0;
   font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+  min-height: 100%;
+  background: #0f1220;
+}
+
+html, body {
+  height: 100%;
+  background: #0f1220;
 }
 
 a { color: inherit; text-decoration: none; }
 
 .app {
   min-height: 100vh;
+  background: var(--bg);
   transition: background 0.3s ease, color 0.3s ease;
 }
 
@@ -76,8 +84,10 @@ a { color: inherit; text-decoration: none; }
     radial-gradient(900px 900px at 50% 90%, rgba(255,79,216,0.1), transparent 60%),
     var(--bg);
   color: var(--fg);
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
+  background-size: 140% 140%;
+  animation: glowDrift 22s ease-in-out infinite;
 }
 
 .glass {
@@ -115,6 +125,33 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
 }
 
+.nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.nav-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .toggle {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border: none;
@@ -129,15 +166,20 @@ a { color: inherit; text-decoration: none; }
   margin: 0 auto;
   padding: 28px 24px 40px;
   width: 100%;
+  flex: 1;
 }
 
 .footer {
+  height: 48px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 28px 24px;
+  padding: 0 24px;
   border-top: 1px solid var(--line);
+  background: rgba(18, 22, 34, 0.92);
+  backdrop-filter: blur(14px);
   font-size: 12px;
+  margin-top: auto;
 }
 
 .a2hs {
@@ -269,7 +311,7 @@ a { color: inherit; text-decoration: none; }
 .form {
   display: grid;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 36px;
 }
 
 .form label {
@@ -285,6 +327,10 @@ a { color: inherit; text-decoration: none; }
   border: 1px solid var(--line);
   background: transparent;
   color: var(--fg);
+}
+
+.form input[type="checkbox"] {
+  padding: 7px 7px;
 }
 
 .auth-footer {
@@ -452,13 +498,73 @@ a { color: inherit; text-decoration: none; }
   100% { background-position: 0% 50%; }
 }
 
+@keyframes glowDrift {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 60%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
 @media (max-width: 900px) {
   .container { padding: 20px 16px 40px; }
   .hero, .dash-hero { grid-template-columns: 1fr; }
   .grid { grid-template-columns: 1fr; }
   .dash-grid { grid-template-columns: 1fr; }
   .auth { grid-template-columns: 1fr; }
-  .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .topbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    z-index: 10;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    border-bottom: none;
+    background: rgba(18, 22, 34, 0.92);
+    backdrop-filter: blur(18px);
+  }
+  .brand { display: none; }
+  .nav {
+    flex: 1;
+    justify-content: space-around;
+  }
+  .nav .ghost {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .nav-text {
+    display: none;
+  }
+  .nav-icon {
+    width: 22px;
+    height: 22px;
+  }
+  .nav-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+  .top-actions {
+    gap: 6px;
+  }
+  .top-actions .ghost,
+  .top-actions .toggle {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
   .a2hs { flex-direction: column; align-items: flex-start; }
+  .footer {
+    height: 48px;
+    padding: 0 16px;
+  }
 }
 </style>
