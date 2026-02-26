@@ -49,8 +49,10 @@ const submit = async () => {
   try {
     const resp = await authApi.login({ email: email.value, password: password.value })
     const token = resp.access_token || resp.accessToken
+    const refresh = resp.refresh_token || resp.refreshToken
     if (!token) throw new Error('Токен не получен')
     tokenStore.set(token)
+    if (refresh) tokenStore.setRefresh(refresh)
     await router.push('/')
   } catch (e) {
     error.value = e.message || 'Ошибка входа'

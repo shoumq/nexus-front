@@ -125,11 +125,18 @@
           Дальше
         </button>
         <button class="primary" :disabled="loading || (step === 1 && !step1Valid)">
-          {{ step === 2 ? 'Отправить' : 'Перейти к шагу 2' }}
+          {{
+            step === 2
+              ? (editingToday ? 'Сохранить изменения' : 'Сохранить')
+              : 'Перейти к шагу 2'
+          }}
         </button>
       </div>
 
-      <div v-if="result" class="muted">Сохранено: {{ result.stored }}</div>
+      <div v-if="notice" class="muted">{{ notice }}</div>
+      <div v-if="result" class="muted">
+        {{ lastSaveWasEdit ? 'Обновлено' : 'Сохранено' }}: {{ result.stored }}
+      </div>
       <div v-if="stepError" class="error">{{ stepError }}</div>
       <div v-if="error" class="error">{{ error }}</div>
     </form>
@@ -145,6 +152,8 @@ import LoaderOverlay from '../components/LoaderOverlay.vue'
 
 const userTz = ref('')
 const step = ref(1)
+const editingToday = ref(false)
+const lastSaveWasEdit = ref(false)
 const point = ref({
   ts: '',
   sleep_hours: 7.2,
@@ -165,6 +174,7 @@ const loading = ref(false)
 const result = ref(null)
 const error = ref('')
 const stepError = ref('')
+const notice = ref('')
 
 const fieldErrors = ref({
   sleep_hours: false,
@@ -213,6 +223,7 @@ const submit = async () => {
     return
   }
   loading.value = true
+  lastSaveWasEdit.value = editingToday.value
   error.value = ''
   result.value = null
   try {
@@ -237,6 +248,15 @@ const submit = async () => {
       ]
     }
     result.value = await aiApi.track(payload)
+    editingToday.value = true
+    const tz = userTz.value || 'UTC'
+    const day = formatDateInTZ(point.value.ts, tz)
+    localStorage.setItem('nexus_last_track_date', day)
+    localStorage.setItem('nexus_last_track_tz', tz)
+    window.dispatchEvent(new Event('track-changed'))
+    const last = await aiApi.lastAnalyze()
+    localStorage.setItem('nexus_last_analyses', JSON.stringify(last))
+    window.dispatchEvent(new Event('analysis-updated'))
   } catch (e) {
     error.value = e.message || 'Ошибка /ai/track'
   } finally {
@@ -249,7 +269,56 @@ onMounted(() => {
   if (!point.value.ts) {
     point.value.ts = new Date().toISOString()
   }
+  loadToday()
 })
+
+const formatDateInTZ = (iso, tz) => {
+  try {
+    const dtf = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+    return dtf.format(new Date(iso))
+  } catch {
+    return new Date(iso).toISOString().slice(0, 10)
+  }
+}
+
+const loadToday = async () => {
+  notice.value = ''
+  try {
+    const resp = await aiApi.today({ user_tz: userTz.value })
+    if (resp?.exists && resp.point) {
+      point.value = {
+        ts: resp.point.ts,
+        sleep_hours: resp.point.sleep_hours,
+        sleep_quality: resp.point.sleep_quality,
+        mood: resp.point.mood,
+        activity: resp.point.activity,
+        productive: resp.point.productive,
+        energy: resp.point.energy,
+        stress: resp.point.stress,
+        concentration: resp.point.concentration,
+        caffeine: resp.point.caffeine,
+        alcohol: resp.point.alcohol,
+        workout: resp.point.workout,
+        llm_text: resp.point.llm_text || ''
+      }
+      const tz = userTz.value || 'UTC'
+      const day = formatDateInTZ(resp.point.ts, tz)
+      localStorage.setItem('nexus_last_track_date', day)
+      localStorage.setItem('nexus_last_track_tz', tz)
+      window.dispatchEvent(new Event('track-changed'))
+      notice.value = 'Сегодняшняя запись загружена. Можно редактировать.'
+      editingToday.value = true
+      step.value = 2
+    }
+  } catch {
+    // ignore
+  }
+}
 </script>
 
 <style scoped>

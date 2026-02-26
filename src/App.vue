@@ -137,6 +137,11 @@ a { color: inherit; text-decoration: none; }
   gap: 8px;
 }
 
+.nav-link.done {
+  border-color: rgba(46, 226, 230, 0.5);
+  color: var(--accent-3);
+}
+
 .nav-icon {
   width: 18px;
   height: 18px;
@@ -212,7 +217,9 @@ a { color: inherit; text-decoration: none; }
   border-radius: 999px;
   font-size: 12px;
   border: 1px solid var(--line);
-  color: var(--muted);
+  color: rgba(244, 246, 251, 0.92);
+  background: rgba(244, 246, 251, 0.12);
+  box-shadow: 0 0 0 1px rgba(244, 246, 251, 0.08) inset;
 }
 
 .primary {
