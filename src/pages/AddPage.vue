@@ -30,11 +30,17 @@
           <span class="pill">шаг 1</span>
         </div>
         <div class="grid-2">
-          <label :class="{ invalid: fieldErrors.sleep_hours }">
-            Сон (ч)
-            <input v-model.number="point.sleep_hours" type="number" step="0.1" />
-            <small class="hint">Сколько часов сна было за ночь.</small>
-            <small v-if="fieldErrors.sleep_hours" class="field-error">Обязательное поле (0–14)</small>
+          <label :class="{ invalid: fieldErrors.sleep_start }">
+            Уснул
+            <input v-model="point.sleep_start" type="time" />
+            <small class="hint">Время, когда заснул.</small>
+            <small v-if="fieldErrors.sleep_start" class="field-error">Обязательное поле</small>
+          </label>
+          <label :class="{ invalid: fieldErrors.sleep_end }">
+            Проснулся
+            <input v-model="point.sleep_end" type="time" />
+            <small class="hint">Время, когда проснулся.</small>
+            <small v-if="fieldErrors.sleep_end" class="field-error">Обязательное поле</small>
           </label>
           <label :class="{ invalid: fieldErrors.sleep_quality }">
             Качество сна (1–10)
@@ -156,7 +162,8 @@ const editingToday = ref(false)
 const lastSaveWasEdit = ref(false)
 const point = ref({
   ts: '',
-  sleep_hours: 7.2,
+  sleep_start: '23:30',
+  sleep_end: '07:30',
   sleep_quality: 7.0,
   mood: 6.8,
   activity: 5.4,
@@ -177,7 +184,8 @@ const stepError = ref('')
 const notice = ref('')
 
 const fieldErrors = ref({
-  sleep_hours: false,
+  sleep_start: false,
+  sleep_end: false,
   sleep_quality: false,
   mood: false,
   activity: false,
@@ -191,7 +199,8 @@ const isNum = (v) => Number.isFinite(Number(v))
 const inRange = (v, min, max) => isNum(v) && Number(v) >= min && Number(v) <= max
 
 const validateStep1 = () => {
-  fieldErrors.value.sleep_hours = !inRange(point.value.sleep_hours, 0, 14)
+  fieldErrors.value.sleep_start = !point.value.sleep_start
+  fieldErrors.value.sleep_end = !point.value.sleep_end
   fieldErrors.value.sleep_quality = !inRange(point.value.sleep_quality, 1, 10)
   fieldErrors.value.mood = !inRange(point.value.mood, 1, 10)
   fieldErrors.value.activity = !inRange(point.value.activity, 1, 10)
@@ -232,7 +241,8 @@ const submit = async () => {
       points: [
         {
           ts: point.value.ts,
-          sleep_hours: Number(point.value.sleep_hours),
+          sleep_start: point.value.sleep_start,
+          sleep_end: point.value.sleep_end,
           sleep_quality: Number(point.value.sleep_quality),
           mood: Number(point.value.mood),
           activity: Number(point.value.activity),
@@ -293,7 +303,8 @@ const loadToday = async () => {
     if (resp?.exists && resp.point) {
       point.value = {
         ts: resp.point.ts,
-        sleep_hours: resp.point.sleep_hours,
+        sleep_start: resp.point.sleep_start || '23:30',
+        sleep_end: resp.point.sleep_end || '07:30',
         sleep_quality: resp.point.sleep_quality,
         mood: resp.point.mood,
         activity: resp.point.activity,

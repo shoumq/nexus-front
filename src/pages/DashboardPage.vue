@@ -183,6 +183,9 @@ const periodLabel = computed(() => {
 })
 
 const avgSleep = computed(() => {
+  const start = analyzeResult.value?.debug?.avg_sleep_start
+  const end = analyzeResult.value?.debug?.avg_sleep_end
+  if (start && end) return `${start}–${end}`
   const raw =
     analyzeResult.value?.debug?.avg_sleep_hours ??
     analyzeResult.value?.debug?.avg_sleep
